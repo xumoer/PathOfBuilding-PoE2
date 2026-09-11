@@ -170,7 +170,7 @@ function main:Init()
 							table.insert(bases, { variantName = "Runemastered", baseName = "Runemastered " .. baseBase })
 						end
 						if #bases > 1 then
-						newItem.baseList = newItem.baseList ?? {}
+						newItem.baseList = newItem.baseList or {}
 							local baseLines = {}
 							-- Add variants for each base
 							for _, base in ipairs(bases) do
@@ -364,7 +364,7 @@ function main:SaveModCache()
 				out:write("end)();(function()\n")
 				count = 0
 			else
-				count += 1
+				count = count + 1
 			end
 		end
 	end
