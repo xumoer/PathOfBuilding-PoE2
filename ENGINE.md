@@ -113,6 +113,47 @@ per-stat comparison semantics (`compPercent`, `lowerIsBetter`).
 Measured on this branch: roughly 3.7 s one-time startup, then ~5 ms per
 comparison with the calculator reused.
 
+## Do not delete the artwork from git
+
+Roughly 80% of this repository is passive-tree sprites and compressed atlases
+that a headless engine never opens. Deleting them from the branch is the obvious
+move and it is the wrong one, for three reasons:
+
+1. **It does not shrink a clone.** The blobs are already in history — `.git` here
+   is 1.2 GB even as a *shallow* clone, against a 466 MB working tree. Removing
+   files only adds another commit; every clone still fetches the history.
+2. **It causes modify/delete conflicts on rebase.** Upstream does modify these
+   files. Commit `49e93925d` ("Export 0.5.5 data") modified one and added 18;
+   merging it into a sprite-stripped tree produces
+   `CONFLICT (modify/delete)`. Each data export would need manual resolution.
+3. **Deleted files come back.** Upstream adds sprites in bulk — commit
+   `defd73418` added 539 of them in one go, a whole tree version. Those are
+   additions, so they merge without conflict and silently reappear, and you would
+   re-delete them after every rebase, forever.
+
+Keep the three concerns separate instead:
+
+| Concern | Mechanism | Effect on rebase |
+| --- | --- | --- |
+| What is in history | leave it alone | none |
+| What is on your disk | `git sparse-checkout` | none — it is local config |
+| What ships in the engine | exclude at packaging time | none |
+
+To skip the artwork locally without touching history:
+
+```sh
+git sparse-checkout set --no-cone \
+	'/*' \
+	'!/src/TreeData/*/*.zst' '!/src/TreeData/*/*.png' '!/src/TreeData/*/*.jpg' \
+	'!/src/Assets/*.zst'     '!/src/Assets/*.png'     '!/src/Assets/*.jpg'
+git sparse-checkout disable   # to undo
+```
+
+Verified on this branch: with those 539 files absent from disk the working tree
+drops from 466 MB to 111 MB, `tools/verify.sh` still passes, and the tree-related
+specs (`TestTreeTab`, `TestPassiveSpec`, `TestItemsTab`) still pass. The engine
+genuinely does not read them — see the note on the image loader below.
+
 ## Things to know before building on this
 
 - **PoB writes to stdout.** `ConPrintf` emits data-loading chatter and warnings.
