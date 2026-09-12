@@ -74,6 +74,11 @@ worse than the original — so review every rewrite rather than trusting a regex
 `verify.sh` exists because a rebase onto upstream can silently reintroduce the
 syntax above. It fails loudly and names the offending file and line.
 
+As of commit `768ae5a` this tree passes the full suite — 52 spec files, 872
+assertions, no failures — alongside a clean parse of all 1122 Lua files. The
+fixes in this branch are behaviour-preserving as far as Path of Building's own
+tests can tell.
+
 Requires `luajit` and the `lua-utf8` module; `--tests` also requires `busted`.
 Upstream's test container (`ghcr.io/pathofbuildingcommunity/pathofbuilding-tests`)
 has all three.
