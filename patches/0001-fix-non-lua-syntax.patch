@@ -1,0 +1,260 @@
+diff --git a/spec/System/TestItemMods_spec.lua b/spec/System/TestItemMods_spec.lua
+index 64c59511d..9a95fb39c 100644
+--- a/spec/System/TestItemMods_spec.lua
++++ b/spec/System/TestItemMods_spec.lua
+@@ -202,13 +202,13 @@ describe("TetsItemMods", function()
+ 		build.itemsTab.controls.craftingSorting:SelByValue("Life", "stat")
+ 		build.calcsTab.GetMiscCalculator = function()
+ 			return function(args)
+-				calcCount += 1
++				calcCount = calcCount + 1
+ 				local life = 0
+ 				for _, modLine in ipairs(args.repItem.explicitModLines) do
+ 					if modLine.line == "+19 to maximum Life" then
+-						retainedCount += 1
++						retainedCount = retainedCount + 1
+ 					end
+-					life += tonumber(modLine.line:match("%+(%d+) to maximum Life")) or 0
++					life = life + (tonumber(modLine.line:match("%+(%d+) to maximum Life")) or 0)
+ 				end
+ 				return { Life = life }
+ 			end
+diff --git a/src/Classes/Item.lua b/src/Classes/Item.lua
+index 3720f4320..b3db4b3dc 100644
+--- a/src/Classes/Item.lua
++++ b/src/Classes/Item.lua
+@@ -724,7 +724,7 @@ function ItemClass:ParseRaw(raw, rarity, highQuality)
+ 				for modId, modData in pairs(self.affixes) do
+ 					-- these can produce false positives, and only ever exist on the monk glove base
+ 					if modId:match("^HandWraps") and not self.name:match("Fists of Stone") then
+-						continue
++						goto continueAffix
+ 					end
+ 					if modData.affix == modName then
+ 						if self:GetModSpawnWeight(modData) > 0 then
+@@ -742,6 +742,7 @@ function ItemClass:ParseRaw(raw, rarity, highQuality)
+ 							end
+ 						end
+ 					end
++					::continueAffix::
+ 				end
+ 				if #self.pendingAffixList == 0 and #backupAffixList > 0 then
+ 					self.pendingAffixList = backupAffixList
+@@ -1418,7 +1419,7 @@ function ItemClass:ParseRaw(raw, rarity, highQuality)
+ 					local strippedModLine = getRuneLineParts(modLine.line)
+ 					if (disabledRuneLines[strippedModLine] or 0) > 0 then
+ 						modLine.disabled = true
+-						disabledRuneLines[strippedModLine] -= 1
++						disabledRuneLines[strippedModLine] = disabledRuneLines[strippedModLine] - 1
+ 					end
+ 				end
+ 			end
+@@ -1650,7 +1651,7 @@ function ItemClass:ParseRaw(raw, rarity, highQuality)
+ 		if #self.modMagnitudeMods > 0 then
+ 			for _, modMagnitudeMod in ipairs(self.modMagnitudeMods) do
+ 				if self:UsesVersionedOrGroupedVariants() and not self:CheckModLineVariant(modMagnitudeMod.sourceLine) then
+-					continue
++					goto continueMagnitude
+ 				end
+ 				local modLists
+ 				if modMagnitudeMod.modType then
+@@ -1662,7 +1663,7 @@ function ItemClass:ParseRaw(raw, rarity, highQuality)
+ 					for _, mod in ipairs(mods or {}) do
+ 						-- avoid scaling variant lines which are not active
+ 						if self:GetModLineVariantCount(mod) == 0 or mod.unscalable then
+-							continue
++							goto continueMod
+ 						end
+ 						-- Modifiers that grant skills are not affected by modifier magnitude.
+ 						local grantsSkill = false
+@@ -1712,8 +1713,10 @@ function ItemClass:ParseRaw(raw, rarity, highQuality)
+ 								mod.extra = extra
+ 							end
+ 						end
++						::continueMod::
+ 					end
+ 				end
++				::continueMagnitude::
+ 			end
+ 		end
+ 	end
+diff --git a/src/Classes/ItemsTab.lua b/src/Classes/ItemsTab.lua
+index 1ee55268d..3cf444fa3 100644
+--- a/src/Classes/ItemsTab.lua
++++ b/src/Classes/ItemsTab.lua
+@@ -474,7 +474,7 @@ holding Shift will put it in the second.]])
+ 		if self.displayItem:UsesVersionedOrGroupedVariants() then
+ 			local rows = self.displayItem.versionList and #self.displayItem.versionList > 1 and 1 or 0
+ 			if self.displayItem.baseList and #self.displayItem.baseList then
+-				rows += 1
++				rows = rows + 1
+ 			end
+ 			if self.displayItem:HasIndependentVariants() then
+ 				rows = rows + (#self.displayItem.variantList > 1 and 1 or 0)
+@@ -535,8 +535,8 @@ holding Shift will put it in the second.]])
+ 	end)
+ 	self.controls.displayItemVariant.y = function()
+ 		local y = 0
+-		y += self.controls.displayItemBaseVariant:IsShown() and 24 or 0
+-		y += self.controls.displayItemVersion:IsShown() and 24 or 0
++		y = y + (self.controls.displayItemBaseVariant:IsShown() and 24 or 0)
++		y = y + (self.controls.displayItemVersion:IsShown() and 24 or 0)
+ 		return y
+ 	end
+ 	self.controls.displayItemVariant.maxDroppedWidth = 1000
+diff --git a/src/Classes/PassiveTreeView.lua b/src/Classes/PassiveTreeView.lua
+index 844996683..4c0a33b2f 100644
+--- a/src/Classes/PassiveTreeView.lua
++++ b/src/Classes/PassiveTreeView.lua
+@@ -782,7 +782,7 @@ function PassiveTreeViewClass:Draw(build, viewPort, inputEvents)
+ 			connectorHandleQueue = { n = 0 }
+ 			self.connectorQueue[handleName] = connectorHandleQueue
+ 		end
+-		connectorHandleQueue.n += 1
++		connectorHandleQueue.n = connectorHandleQueue.n + 1
+ 		connectorHandleQueue[connectorHandleQueue.n] = connector
+ 	end
+ 
+diff --git a/src/Classes/Tooltip.lua b/src/Classes/Tooltip.lua
+index 21f3dbbcd..6d46bd971 100644
+--- a/src/Classes/Tooltip.lua
++++ b/src/Classes/Tooltip.lua
+@@ -234,8 +234,8 @@ function TooltipClass:AddBuildPlannerNote(size, text, prefix)
+ 				depth, closeBrace = 1, openBrace + 1
+ 				while closeBrace <= finish and depth > 0 do
+ 					local char = text:sub(closeBrace, closeBrace)
+-					if char == "{" then depth += 1 elseif char == "}" then depth -= 1 end
+-					closeBrace += 1
++					if char == "{" then depth = depth + 1 elseif char == "}" then depth = depth - 1 end
++					closeBrace = closeBrace + 1
+ 				end
+ 			end
+ 			if validMarkup and depth == 0 then
+@@ -247,9 +247,9 @@ function TooltipClass:AddBuildPlannerNote(size, text, prefix)
+ 					if tag == "s" then lineSize = m_floor(size * 0.75 + 0.5) elseif tag == "m" then lineSize = size elseif tag == "l" then lineSize = m_floor(size * 1.25 + 0.5) end
+ 					if font ~= nil or lineSize then
+ 						local line = 1
+-						for _ in text:sub(1, tagStart - 1):gmatch("\n") do line += 1 end
++						for _ in text:sub(1, tagStart - 1):gmatch("\n") do line = line + 1 end
+ 						local lastLine = line
+-						for _ in text:sub(tagStart, closeBrace - 1):gmatch("\n") do lastLine += 1 end
++						for _ in text:sub(tagStart, closeBrace - 1):gmatch("\n") do lastLine = lastLine + 1 end
+ 						for index = line, lastLine do
+ 							lineStyles[index] = lineStyles[index] or { }
+ 							if font ~= nil then lineStyles[index].font = font end
+@@ -277,7 +277,7 @@ function TooltipClass:AddBuildPlannerNote(size, text, prefix)
+ 	for renderedLine in (renderedText .. "\n"):gmatch("([^\n]*)\n") do
+ 		local style = lineStyles[line]
+ 		self:AddLine(style and style.size or size, (line == 1 and (prefix or "") or "") .. renderedLine, style and style.font)
+-		line += 1
++		line = line + 1
+ 	end
+ end
+ 
+diff --git a/src/Export/Scripts/uModsToText.lua b/src/Export/Scripts/uModsToText.lua
+index ebc4ce1e4..6de98ecc4 100644
+--- a/src/Export/Scripts/uModsToText.lua
++++ b/src/Export/Scripts/uModsToText.lua
+@@ -201,7 +201,7 @@ for _, name in ipairs(itemTypes) do
+ 				if mod.modTags then
+ 					for _, tag in ipairs(mod.modTags) do
+ 						if tag == "unveiled_mod" then
+-							prefix ..= "{desecrated}"
++							prefix = prefix .. "{desecrated}"
+ 						end
+ 					end
+ 				end
+diff --git a/src/Modules/BuildExportPoE2.lua b/src/Modules/BuildExportPoE2.lua
+index 4294e5420..efbcacba5 100644
+--- a/src/Modules/BuildExportPoE2.lua
++++ b/src/Modules/BuildExportPoE2.lua
+@@ -144,16 +144,16 @@ local function buildSkills(skillSet)
+ 				-- inactive skill sets don't have a display skill list so we need to make one
+ 				activeGem = activeSkillGems(group)[activeIdx]
+ 			end
+-			if not activeGem then continue end
+-			local activeId = activeGem.gemData?.gameId
++			if not activeGem then goto continueGroup end
++			local activeId = activeGem.gemData and activeGem.gemData.gameId
+ 			if activeId then
+ 				local entry = { id = activeId }
+ 				local activeText = gemAdditionalText(activeGem, false)
+ 				if activeText then entry.additional_text = activeText end
+ 				local supports = {}
+ 				for _, gem in ipairs(group.gemList) do
+-					if gem ~= activeGem and gem.enabled ~= false and gem.gemData?.grantedEffect.support then
+-						local supId = gem.gemData?.gameId
++					if gem ~= activeGem and gem.enabled ~= false and gem.gemData and gem.gemData.grantedEffect.support then
++						local supId = gem.gemData and gem.gemData.gameId
+ 						if supId then
+ 							local supText = gemAdditionalText(gem, true)
+ 							if supText then
+@@ -172,6 +172,7 @@ local function buildSkills(skillSet)
+ 			else
+ 				ConPrintf("[PoE2Export] skipping active gem with no id in group '%s'", tostring(group.label or "?"))
+ 			end
++			::continueGroup::
+ 		end
+ 	end
+ 	return out
+@@ -272,9 +273,9 @@ function M.GetLoadouts(build)
+ 			t_insert(out, {
+ 				name = plainName,
+ 				fileName = displayName,
+-				specIndex = loadout?.specId,
+-				skillSetId = loadout?.skillSetId,
+-				itemSetId = loadout?.itemSetId,
++				specIndex = loadout and loadout.specId,
++				skillSetId = loadout and loadout.skillSetId,
++				itemSetId = loadout and loadout.itemSetId,
+ 			})
+ 		end
+ 	end
+diff --git a/src/Modules/CalcOffence.lua b/src/Modules/CalcOffence.lua
+index 960a5e16d..e0296fdac 100644
+--- a/src/Modules/CalcOffence.lua
++++ b/src/Modules/CalcOffence.lua
+@@ -5188,7 +5188,7 @@ function calcs.offence(env, actor, activeSkill)
+ 			return baseVal
+ 		end
+ 
+-		local critMetatable = { __index = |_, key| -> skillCfg.skillCond[key] or cfg.skillCond[key] }
++		local critMetatable = { __index = function(_, key) return skillCfg.skillCond[key] or cfg.skillCond[key] end }
+ 		---Calculate global / breakdown values for a damaging ailment
+ 		---@param ailment string
+ 		---@param ailmentDamageType table
+diff --git a/src/Modules/CalcSetup.lua b/src/Modules/CalcSetup.lua
+index 76c1bd37b..779d224b5 100644
+--- a/src/Modules/CalcSetup.lua
++++ b/src/Modules/CalcSetup.lua
+@@ -1733,7 +1733,7 @@ function calcs.initEnv(build, mode, override, specEnv)
+ 					limit = { count = 0, max = dbMod.limit, names = { } }
+ 					augmentLimits[dbMod.limitId or augmentName] = limit
+ 				end
+-				limit.count += count
++				limit.count = limit.count + count
+ 				t_insert(limit.names, augmentName)
+ 			end
+ 		end
+diff --git a/src/Modules/Main.lua b/src/Modules/Main.lua
+index 69c4eec86..53655bb2a 100644
+--- a/src/Modules/Main.lua
++++ b/src/Modules/Main.lua
+@@ -170,7 +170,7 @@ function main:Init()
+ 							table.insert(bases, { variantName = "Runemastered", baseName = "Runemastered " .. baseBase })
+ 						end
+ 						if #bases > 1 then
+-						newItem.baseList = newItem.baseList ?? {}
++						newItem.baseList = newItem.baseList or {}
+ 							local baseLines = {}
+ 							-- Add variants for each base
+ 							for _, base in ipairs(bases) do
+@@ -364,7 +364,7 @@ function main:SaveModCache()
+ 				out:write("end)();(function()\n")
+ 				count = 0
+ 			else
+-				count += 1
++				count = count + 1
+ 			end
+ 		end
+ 	end

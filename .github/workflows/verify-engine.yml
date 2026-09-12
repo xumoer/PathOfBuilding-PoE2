@@ -1,0 +1,40 @@
+# Guards the headless-engine branch.
+#
+# A rebase onto upstream can silently reintroduce the non-Lua syntax documented
+# in ENGINE.md, which stops the program parsing at all. This catches that in CI
+# rather than mid-session.
+#
+# Reuses upstream's test container, which already carries luajit, lua-utf8 and
+# busted at the versions the project expects.
+name: Verify headless engine
+
+on:
+  push:
+    branches: [ 'claude/**' ]
+  pull_request:
+    branches: [ 'claude/**' ]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    container: ghcr.io/pathofbuildingcommunity/pathofbuilding-tests:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Parse sweep, headless boot, comparison smoke test
+        run: ./tools/verify.sh
+
+      # Kept separate so a calculation regression is distinguishable at a glance
+      # from the tree failing to parse.
+      - name: Path of Building test suite
+        run: |
+          set -eu
+          fail=0
+          for spec in $(find spec/System -name '*_spec.lua' | sort); do
+            echo "::group::$spec"
+            busted --lua=luajit "../$spec" || fail=1
+            echo "::endgroup::"
+          done
+          exit $fail
